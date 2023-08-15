@@ -23,7 +23,7 @@ export default class bybit extends bybitRest {
                 'watchTicker': true,
                 'watchTickers': false, // for now
                 'watchTrades': true,
-                'watchPosition': undefined,
+                'watchPositions': true,
             },
             'urls': {
                 'api': {
@@ -1094,6 +1094,52 @@ export default class bybit extends bybitRest {
         }, market);
     }
 
+    async watchPositions (symbol: string = undefined, since: Int = undefined, limit: Int = undefined, params = {}) {
+        /**
+         * @method
+         * @name bybit#watchPositions
+         * @description watches information on multiple orders made by the user
+         * @see https://bybit-exchange.github.io/docs/v5/websocket/private/position
+         * @param {int} [since] the earliest time in ms to fetch orders for
+         * @param {int} [limit] the maximum number of  orde structures to retrieve
+         * @param {object} [params] extra parameters specific to the bybit api endpoint
+         * @returns {object[]} a list of [order structures]{@link https://docs.ccxt.com/#/?id=order-structure
+         */
+        await this.loadMarkets ();
+        const method = 'watchPositions';
+        const messageHash = 'position';
+        const url = this.getUrlByMarketType (symbol, true, method, params);
+        await this.authenticate (url);
+        const topicsByMarket = {
+            'unified': [ 'position' ],
+        };
+        const topics = this.safeValue (topicsByMarket, this.getPrivateType (url));
+        const positions = await this.watchTopics (url, messageHash, topics, params);
+        if (this.newUpdates) {
+            limit = positions.getLimit (symbol, limit);
+        }
+        return this.filterBySymbolSinceLimit (positions, symbol, since, limit, true);
+    }
+
+    handlePositions (client: Client, message) {
+        const result = {};
+        const positions = this.safeValue (message, 'data');
+        for (let i = 0; i < positions.length; i++) {
+            const position = this.safeValue (positions, i);
+            const symbolId = this.safeString (position, 'symbol');
+            const market = this.market (symbolId);
+            const symbol = this.safeString (market, 'symbol');
+            result[symbol] = this.parseWsPosition (position, market);
+        }
+    }
+
+    parseWsPosition (position, market = undefined) {
+        console.log (position);
+        return {
+
+        };
+    }
+
     async watchBalance (params = {}) {
         /**
          * @method
@@ -1515,6 +1561,7 @@ export default class bybit extends bybitRest {
             'ticker': this.handleTicker,
             'trade': this.handleTrades,
             'publicTrade': this.handleTrades,
+            'position': this.handlePositions,
             'depth': this.handleOrderBook,
             'wallet': this.handleBalance,
             'outboundAccountInfo': this.handleBalance,
